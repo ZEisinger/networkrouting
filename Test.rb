@@ -1,8 +1,37 @@
-class Node
-	
-	
-	
-	
+require "yaml"
+
+class NeighborTable
+
+  def initialize()
+    @table_weight = Hash.new
+    @table_next = Hash.new
+  end
+
+  def insertNeighbor(dest, weight)
+    @table_weight[dest] = weight
+    @table_next[dest] = dest
+  end
+
+  def updateTables(string_obj, prior)
+    obj = YAML::load(string_obj)
+    obj.each { |a,b| checkNeighbor(a, prior, b) }
+  end
+
+  def checkNeighbor(dest, prior, prior_weight)
+    if (@table_weight.has_key?(dest))
+      if (@table_weight[dest] > prior_weight + @table_weight[prior])
+        @table_weight[dest] = prior_weight + @table_weight[prior]
+        @table_next[dest] = prior
+      end
+    else
+      @table_weight[dest] = prior_weight + @table_weight[prior]
+      @table_next[dest] = prior
+    end
+  end
+
+  def to_s()
+    YAML::dump(@table_weight)
+  end
 end
 
 #This will have an identifier to determine which type of message it is
@@ -25,10 +54,17 @@ class Message
 end
 
 #TODO: Get command line args to determine what node I am
+
+node_name = ARGV[0]
+weights = ARGV[1]
+
 #TODO: Read file, figure out my IPs
 #TODO: Read other file, figure out neighbors
 #TODO: Read other other file, figure out my weights to neighbors
 #TODO: Perform flood message algorithm
+
+
+
 #TODO: Once flooding is done, use Djikstras
 #TODO: Then we can 
 
