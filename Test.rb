@@ -101,6 +101,11 @@ class Graph
       return nil
     }
   end
+
+  def to_s()
+    return YAML::dump(self)
+  end
+
 end
 
 #This will have an identifier to determine which type of message it is
@@ -142,6 +147,7 @@ config.close
 
 #Set up NeighborTable
 neighbor_table = NeighborTable.new
+addrs_to_nodes = Hash.new
 
 #TODO: Read file, figure out my IPs
 addrs = Array.new
@@ -151,6 +157,7 @@ while (line = file.gets)
   if (a[0] == node_name)
     addrs.push(a[1])
   end
+  addrs_to_nodes["#{a[1]}"] =  "#{a[0]}"
 end
 file.close
 puts "My IPs"
@@ -171,7 +178,10 @@ while (line = links.gets)
 end
 links.close
 
-graph = Graph.new(node_name,neighbor_table)
+graph = Graph.new(node_name,neighbor_table,addrs_to_nodes)
+
+puts "GRAPH"
+puts "#{graph.to_s}"
 
 #TODO: Perform flood message algorithm
 #Create message
@@ -179,18 +189,22 @@ graph = Graph.new(node_name,neighbor_table)
 #TODO: Then we can start listening for command line messages 
 
 server = TCPServer.open(2000)
-Thread.new{
+server_thread = Thread.new{
 loop do
     Thread.fork(server.accept) do |client|
       content = client.recv($packet_size)
       a = content.split("#!")
-      puts content
+      #puts content
       puts "got here!"
-      if(graph.add_neighbor(a[1], a[3]))
-	#TODO: send flood message to other connections
-      end
       client.puts "Hello from #{addrs[0]}"
       client.close
+      if(graph.add_neighbor(a[1], a[3]))
+        #sendFlood(a[1], a[3])
+      end
+	puts "Building the closest"
+	graph.build_closest
+	puts "THIS IS THE YAML"
+	puts "#{graph.to_s}"
     end
 end
 }
@@ -199,8 +213,8 @@ sleep(5)
 def sendFlood(from_ip, message_content)
 $return_addrs.each{|key, value|
   message = Message.new("FLOOD", "#{from_ip}", "1", "#{message_content}")
-  puts key
-  puts message.build_message
+#  puts key
+#  puts message.build_message
   test = TCPSocket.open(key, 2000)
   test.write message.build_message
   puts "got back: " + test.recv($packet_size)
@@ -212,4 +226,4 @@ $return_addrs.each{|key, value|
    sendFlood(value, "#{neighbor_table.to_s}")
 }
 
-
+server_thread.join()
