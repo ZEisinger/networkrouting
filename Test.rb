@@ -10,7 +10,7 @@ class NeighborTable
   end
 
   def insertNeighbor(dest, weight)
-    @table_weight[dest] = weight
+    @table_weight[dest] = weight.to_i
   end
 
   def incrementSequence()
@@ -46,44 +46,53 @@ class Graph
       return false
     end
     $semaphore.synchronize {
+	puts "Obtained lock for add"
       if ((not @graphs.has_key?(@addrs_to_nodes[ip])) or @graphs[@addrs_to_nodes[ip]].sequence_number < obj.sequence_number)
         @graphs[@addrs_to_nodes[ip]] = obj
+	puts "Added and now returning"
         return true
       end
     }
+	puts "didn't add now returning"
     return false
   end
 
   def build_closest()
-    key_weight = hash.new
-    keys_to_add = array.new
+    key_weight = Hash.new
+    keys_to_add = Array.new
+	puts "trying to get lock..."
     $semaphore.synchronize {
+	puts "lock obtained"
       @graphs.each do |name,value|
         key_weight[name] = 2**29 - 1
         @closest_prev[name] = nil
         keys_to_add << name
       end
       key_weight[@my_name] = 0
-      
+      puts "initialized stuff"
       while not keys_to_add.empty? do
         min = 2**30 - 1
         u = nil
-        key_weight.each do |name,weight|
-          if weight < min
-            u = name
-          end
-        end
-        keys_to_add.remove(u)
+	keys_to_add.each do |name|
+	   if key_weight[name] < min
+	      u = name
+	   end
+	end
+        keys_to_add.delete(u)
         
-        @graphs[u].table_weights.each do |ip,value|
+        @graphs[u].table_weight.each do |ip,value|
           alt = key_weight[u] + value;
-          if alt < key_weight[addrs_to_nodes[ip]]
-            key_weight[addrs_to_nodes[ip]] = alt
-            @closest_prev = u
+	puts "#{alt}"
+	puts "#{key_weight[@addrs_to_nodes[ip]]}"
+          if alt < key_weight[@addrs_to_nodes[ip]]
+            key_weight[@addrs_to_nodes[ip]] = alt
+            @closest_prev[@addrs_to_nodes[ip]] = u
           end
         end
       end
-    } 
+    }
+
+	puts "Done with algorithm" 
   end
 
   def find_next(name)
@@ -94,7 +103,7 @@ class Graph
         curr = @closest_prev[name]
       end
       @graphs[@my_name].each do |key, value|
-        if addrs_to_nodes[key] == name
+        if @addrs_to_nodes[key] == name
           return key
         end
       end
@@ -191,6 +200,7 @@ puts "#{graph.to_s}"
 server = TCPServer.open(2000)
 server_thread = Thread.new{
 loop do
+   
     Thread.fork(server.accept) do |client|
       content = client.recv($packet_size)
       a = content.split("#!")
@@ -201,12 +211,18 @@ loop do
       if(graph.add_neighbor(a[1], a[3]))
         #sendFlood(a[1], a[3])
       end
+	begin
 	puts "Building the closest"
 	graph.build_closest
 	puts "THIS IS THE YAML"
 	puts "#{graph.to_s}"
+	rescue Exception => e
+	  puts e.message
+	  puts e.backtrace.inspect
+  	end
     end
-end
+  end
+
 }
 sleep(5)
 
