@@ -5,41 +5,109 @@ class NeighborTable
 
   def initialize()
     @table_weight = Hash.new
-    @table_next = Hash.new
+    @sequnce_number = 0
+    #@table_next = Hash.new
   end
 
   def insertNeighbor(dest, weight)
     @table_weight[dest] = weight
-    @table_next[dest] = dest
+    #@table_next[dest] = dest
   end
 
-  def updateTables(string_obj, prior)
-    obj = YAML::load(string_obj)
-    obj.each { |a,b| checkNeighbor(a, prior, b) }
+  def incrementSequence()
+    @sequence_number = @sequence_number + 1
   end
 
-  def checkNeighbor(dest, prior, prior_weight)
-    if (@table_weight.has_key?(dest))
-      if (@table_weight[dest] > prior_weight + @table_weight[prior])
-        @table_weight[dest] = prior_weight + @table_weight[prior]
-        @table_next[dest] = prior
-      end
-    else
-      @table_weight[dest] = prior_weight + @table_weight[prior]
-      @table_next[dest] = prior
-    end
-  end
+  #def updateTables(string_obj, prior)
+  #  obj = YAML::load(string_obj)
+  #  obj.each { |a,b| checkNeighbor(a, prior, b) }
+  #end
+
+  #def checkNeighbor(dest, prior, prior_weight)
+  #  if (@table_weight.has_key?(dest))
+  #    if (@table_weight[dest] > prior_weight + @table_weight[prior])
+  #      @table_weight[dest] = prior_weight + @table_weight[prior]
+  #      @table_next[dest] = prior
+  #    end
+  #  else
+  #    @table_weight[dest] = prior_weight + @table_weight[prior]
+  #    @table_next[dest] = prior
+  #  end
+  #end
 
   def table_weight
-	return @table_weight
+    return @table_weight
   end
 
-  def table_next
-	return @table_next
+  def sequence_number
+    return @sequence_number
   end
+
+  #def table_next
+#	return @table_next
+  #end
 
   def to_s()
-	return YAML::dump(@table_weight)
+    return YAML::dump(@table_weight)
+  end
+end
+
+class Graph
+  def initialize(my_name, neighbors)
+    @my_name = my_name
+    @graphs = hash.new
+    @graphs[my_name] = neighbor
+    @closest_prev = hash.new
+  end
+
+  def add_neighbor(name, obj)
+    if (name == @my_name)
+      return false
+    end
+    if (not @graphs.has_key?(name) or @graphs[name].sequence_number < obj.sequence_number)
+      @graphs[name] = obj
+      return true
+    end
+    return false
+  end
+
+  def build_closest()
+    key_weight = hash.new
+    keys_to_add = array.new
+    @graphs.each do |name,value|
+      key_weight[name] = 2**29 - 1
+      @closest_prev[name] = nil
+      keys_to_add << name
+    end
+    key_weight[@my_name] = 0
+    
+    while not keys_to_add.empty? do
+      min = 2**30 - 1
+      u = nil
+      key_weight.each do |name,weight|
+        if weight < min
+          u = name
+        end
+      end
+      keys_to_add.remove(u)
+
+      @graphs[u].table_weights.each do |name,value|
+        alt = key_weight[u] + value;
+        if alt < key_weight[name]
+          key_weight[name] = alt
+          @closest_prev = u
+        end
+      end
+    end 
+  end
+
+  def find_next(name)
+    curr = @closest_prev[name]
+    while curr != nil do
+      name = curr
+      curr = @closest_prev[name]
+    end
+    return name
   end
 end
 
