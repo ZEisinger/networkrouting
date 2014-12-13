@@ -25,25 +25,26 @@ class NeighborTable
   end
 
   def to_s()
-    return YAML::dump(@table_weight)
+    return YAML::dump(self)
   end
 end
 
 class Graph
-  def initialize(my_name, neighbors)
+  def initialize(my_name, neighbors, addrs_to_nodes)
     @my_name = my_name
     @graphs = Hash.new
-    @graphs[my_name] = neighbors
+    @graphs[@my_name] = neighbors
     @closest_prev = Hash.new
+    @addrs_to_nodes = addrs_to_nodes
   end
 
   def add_neighbor(name, obj_string)
     obj = YAML.load(obj_string)
-    if (name == @my_name)
+    if (@my_name == @addrs_to_nodes[name])
       return false
     end
-    if (not @graphs.has_key?(name) or @graphs[name].sequence_number < obj.sequence_number)
-      @graphs[name] = obj
+    if (not @graphs.has_key?(@addrs_to_nodes[name]) or @graphs[@addrs_to_nodes[name]].sequence_number < obj.sequence_number)
+      @graphs[@addrs_to_nodes[name]] = obj
       return true
     end
     return false
@@ -71,8 +72,8 @@ class Graph
 
       @graphs[u].table_weights.each do |name,value|
         alt = key_weight[u] + value;
-        if alt < key_weight[name]
-          key_weight[name] = alt
+        if alt < key_weight[addrs_to_nodes[name]]
+          key_weight[addrs_to_nodes[name]] = alt
           @closest_prev = u
         end
       end
@@ -85,7 +86,12 @@ class Graph
       name = curr
       curr = @closest_prev[name]
     end
-    return name
+    @graphs[@my_name].each do |key, value|
+      if addrs_to_nodes[key] == name
+        return key
+      end
+    end
+    return nil
   end
 end
 
