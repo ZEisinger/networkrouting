@@ -1,5 +1,6 @@
 require "yaml"
 require "socket"
+require "thread"
 
 class NeighborTable
 
@@ -36,62 +37,69 @@ class Graph
     @graphs[@my_name] = neighbors
     @closest_prev = Hash.new
     @addrs_to_nodes = addrs_to_nodes
+    @lock = false
   end
 
-  def add_neighbor(name, obj_string)
-    obj = YAML.load(obj_string)
-    if (@my_name == @addrs_to_nodes[name])
+  def add_neighbor(ip, obj_string)
+    obj = YAML::load(obj_string)
+    if (@my_name == @addrs_to_nodes[ip])
       return false
     end
-    if (not @graphs.has_key?(@addrs_to_nodes[name]) or @graphs[@addrs_to_nodes[name]].sequence_number < obj.sequence_number)
-      @graphs[@addrs_to_nodes[name]] = obj
-      return true
-    end
+    $semaphore.synchronize {
+      if ((not @graphs.has_key?(@addrs_to_nodes[ip])) or @graphs[@addrs_to_nodes[ip]].sequence_number < obj.sequence_number)
+        @graphs[@addrs_to_nodes[ip]] = obj
+        return true
+      end
+    }
     return false
   end
 
   def build_closest()
     key_weight = hash.new
     keys_to_add = array.new
-    @graphs.each do |name,value|
-      key_weight[name] = 2**29 - 1
-      @closest_prev[name] = nil
-      keys_to_add << name
-    end
-    key_weight[@my_name] = 0
-    
-    while not keys_to_add.empty? do
-      min = 2**30 - 1
-      u = nil
-      key_weight.each do |name,weight|
-        if weight < min
-          u = name
+    $semaphore.synchronize {
+      @graphs.each do |name,value|
+        key_weight[name] = 2**29 - 1
+        @closest_prev[name] = nil
+        keys_to_add << name
+      end
+      key_weight[@my_name] = 0
+      
+      while not keys_to_add.empty? do
+        min = 2**30 - 1
+        u = nil
+        key_weight.each do |name,weight|
+          if weight < min
+            u = name
+          end
+        end
+        keys_to_add.remove(u)
+        
+        @graphs[u].table_weights.each do |ip,value|
+          alt = key_weight[u] + value;
+          if alt < key_weight[addrs_to_nodes[ip]]
+            key_weight[addrs_to_nodes[ip]] = alt
+            @closest_prev = u
+          end
         end
       end
-      keys_to_add.remove(u)
-
-      @graphs[u].table_weights.each do |name,value|
-        alt = key_weight[u] + value;
-        if alt < key_weight[addrs_to_nodes[name]]
-          key_weight[addrs_to_nodes[name]] = alt
-          @closest_prev = u
-        end
-      end
-    end 
+    } 
   end
 
   def find_next(name)
-    curr = @closest_prev[name]
-    while curr != nil do
-      name = curr
+    $semaphore.synchronize{
       curr = @closest_prev[name]
-    end
-    @graphs[@my_name].each do |key, value|
-      if addrs_to_nodes[key] == name
-        return key
+      while curr != nil do
+        name = curr
+        curr = @closest_prev[name]
       end
-    end
-    return nil
+      @graphs[@my_name].each do |key, value|
+        if addrs_to_nodes[key] == name
+          return key
+        end
+      end
+      return nil
+    }
   end
 end
 
@@ -118,6 +126,9 @@ end
 
 #Get command line arg to determine what node I am
 node_name = ARGV[0]
+
+#initialize mutex
+$semaphore = Mutex.new
 
 #Read in config file
 config = File.new("global.config", "r")
