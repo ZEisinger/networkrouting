@@ -32,9 +32,9 @@ end
 class Graph
   def initialize(my_name, neighbors)
     @my_name = my_name
-    @graphs = hash.new
-    @graphs[my_name] = neighbor
-    @closest_prev = hash.new
+    @graphs = Hash.new
+    @graphs[my_name] = neighbors
+    @closest_prev = Hash.new
   end
 
   def add_neighbor(name, obj)
@@ -116,7 +116,7 @@ node_name = ARGV[0]
 config = File.new("global.config", "r")
 line = config.gets
 a = line.split(",")
-packet_size = a[0].to_i
+$packet_size = a[0].to_i
 weights = a[1]
 interval = a[2]
 
@@ -140,13 +140,13 @@ addrs.each { |a| puts a }
 
 #Read weights file, figure out neighbors
 links = File.new(weights, "r")
-return_addrs = Hash.new
+$return_addrs = Hash.new
 
 while (line = links.gets)
 	a = line.split(",")
 	if (addrs.include?(a[0]))
 		#map of destination to source address
-		return_addrs[a[1]] = a[0]
+		$return_addrs[a[1]] = a[0]
 		neighbor_table.insertNeighbor(a[1], a[2])
 		puts "My neighbor: #{a[1]} Weight: #{a[2]}"
 	end
@@ -164,11 +164,13 @@ server = TCPServer.open(2000)
 Thread.new{
 loop do
     Thread.fork(server.accept) do |client|
-      content = client.recv(packet_size)
+      content = client.recv($packet_size)
       a = content.split("#!")
+      puts content
       puts "got here!"
-      add_neighbor(a[1], a[3])
-      puts "My New Neighbor Table: " + neighbor_table.to_s
+      if(graph.add_neighbor(a[1], a[3]))
+	#TODO: send flood message to other connections
+      end
       client.puts "Hello from #{addrs[0]}"
       client.close
     end
@@ -176,10 +178,20 @@ end
 }
 sleep(5)
 
-return_addrs.each{|key, value|
-  message = Message.new("FLOOD", "1", value, "#{neighbor_table.to_s}")
+def sendFlood(from_ip, message_content)
+$return_addrs.each{|key, value|
+  message = Message.new("FLOOD", "#{from_ip}", "1", "#{message_content}")
+  puts key
+  puts message.build_message
   test = TCPSocket.open(key, 2000)
   test.write message.build_message
-  puts "got back: " + test.recv(packet_size)
+  puts "got back: " + test.recv($packet_size)
   test.close
 }
+end
+
+$return_addrs.each{|key, value|
+   sendFlood(value, "#{neighbor_table.to_s}")
+}
+
+
