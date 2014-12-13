@@ -1,39 +1,20 @@
 require "yaml"
-require 'socket'
+require "socket"
 
 class NeighborTable
 
   def initialize()
     @table_weight = Hash.new
     @sequnce_number = 0
-    #@table_next = Hash.new
   end
 
   def insertNeighbor(dest, weight)
     @table_weight[dest] = weight
-    #@table_next[dest] = dest
   end
 
   def incrementSequence()
     @sequence_number = @sequence_number + 1
   end
-
-  #def updateTables(string_obj, prior)
-  #  obj = YAML::load(string_obj)
-  #  obj.each { |a,b| checkNeighbor(a, prior, b) }
-  #end
-
-  #def checkNeighbor(dest, prior, prior_weight)
-  #  if (@table_weight.has_key?(dest))
-  #    if (@table_weight[dest] > prior_weight + @table_weight[prior])
-  #      @table_weight[dest] = prior_weight + @table_weight[prior]
-  #      @table_next[dest] = prior
-  #    end
-  #  else
-  #    @table_weight[dest] = prior_weight + @table_weight[prior]
-  #    @table_next[dest] = prior
-  #  end
-  #end
 
   def table_weight
     return @table_weight
@@ -42,10 +23,6 @@ class NeighborTable
   def sequence_number
     return @sequence_number
   end
-
-  #def table_next
-#	return @table_next
-  #end
 
   def to_s()
     return YAML::dump(@table_weight)
@@ -116,16 +93,15 @@ end
 #If it is a message, the message will be a payload
 #Delimited by "#!"
 class Message
-	def initialize(protocol_identifier, ip, sequence_number, total,  message)
+	def initialize(protocol_identifier, ip, total,  message)
 		@protocol_identifier = protocol_identifier
 		@ip = ip
-		@sequence_number = sequence_number
 		@total = total
 		@message = message
 	end
 
 	def build_message
-		return @protocol_identifier + "#!" + @ip + "#!" +  @sequence_number + "#!" + @total + "#!" + @message + "\000"
+		return @protocol_identifier + "#!" + @ip + "#!" + @total + "#!" + @message + "\000"
 	end
 	
 	def self.protocol_identifier
@@ -153,10 +129,10 @@ neighbor_table = NeighborTable.new
 addrs = Array.new
 file = File.new("nodes-to-addrs.txt", "r")
 while (line = file.gets)
-	a = line.split(" ")
-	if (a[0] == node_name)
-		addrs.push(a[1])
-	end
+  a = line.split(" ")
+  if (a[0] == node_name)
+    addrs.push(a[1])
+  end
 end
 file.close
 puts "My IPs"
@@ -177,6 +153,8 @@ while (line = links.gets)
 end
 links.close
 
+graph = Graph.new(node_name,neighbor_table)
+
 #TODO: Perform flood message algorithm
 #Create message
 #TODO: Once flooding is done
@@ -185,23 +163,23 @@ links.close
 server = TCPServer.open(2000)
 Thread.new{
 loop do
-	Thread.fork(server.accept) do |client|
-		content = client.recv(packet_size)
-		a = content.split("#!")
-		puts "got here!"
-		neighbor_table.updateTables(a[4], a[1])
-		puts "My New Neighbor Table: " + neighbor_table.to_s
-		client.puts "Hello from #{addrs[0]}"
-		client.close
-	end
+    Thread.fork(server.accept) do |client|
+      content = client.recv(packet_size)
+      a = content.split("#!")
+      puts "got here!"
+      add_neighbor(a[1], a[3])
+      puts "My New Neighbor Table: " + neighbor_table.to_s
+      client.puts "Hello from #{addrs[0]}"
+      client.close
+    end
 end
 }
 sleep(5)
 
 return_addrs.each{|key, value|
-message = Message.new("FLOOD", "1", value, "1", "#{neighbor_table.to_s}")
-test = TCPSocket.open(key, 2000)
-test.write message.build_message
-puts "got back: " + test.recv(packet_size)
-test.close
+  message = Message.new("FLOOD", "1", value, "#{neighbor_table.to_s}")
+  test = TCPSocket.open(key, 2000)
+  test.write message.build_message
+  puts "got back: " + test.recv(packet_size)
+  test.close
 }
