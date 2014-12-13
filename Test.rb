@@ -37,7 +37,8 @@ class Graph
     @closest_prev = Hash.new
   end
 
-  def add_neighbor(name, obj)
+  def add_neighbor(name, obj_string)
+    obj = YAML.load(obj_string)
     if (name == @my_name)
       return false
     end
