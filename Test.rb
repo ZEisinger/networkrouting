@@ -60,16 +60,18 @@ class Graph
   def build_closest()
     key_weight = Hash.new
     keys_to_add = Array.new
-	puts "trying to get lock..."
     $semaphore.synchronize {
-	puts "lock obtained"
       @graphs.each do |name,value|
         key_weight[name] = 2**29 - 1
         @closest_prev[name] = nil
         keys_to_add << name
       end
       key_weight[@my_name] = 0
-      puts "initialized stuff"
+
+      if @graphs.keys == keys_to_add
+        return
+      end
+
       while not keys_to_add.empty? do
         min = 2**30 - 1
         u = nil
@@ -82,8 +84,6 @@ class Graph
         
         @graphs[u].table_weight.each do |ip,value|
           alt = key_weight[u] + value;
-	puts "#{alt}"
-	puts "#{key_weight[@addrs_to_nodes[ip]]}"
           if alt < key_weight[@addrs_to_nodes[ip]]
             key_weight[@addrs_to_nodes[ip]] = alt
             @closest_prev[@addrs_to_nodes[ip]] = u
@@ -91,8 +91,6 @@ class Graph
         end
       end
     }
-
-	puts "Done with algorithm" 
   end
 
   def find_next(name)
