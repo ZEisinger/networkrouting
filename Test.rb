@@ -3,28 +3,28 @@ require "socket"
 require "thread"
 
 class NeighborTable
-
+  
   def initialize()
     @table_weight = Hash.new
     @sequence_number = 0
   end
-
+  
   def insertNeighbor(dest, weight)
     @table_weight[dest] = weight.to_i
   end
-
+  
   def incrementSequence()
     @sequence_number = @sequence_number + 1
   end
-
+  
   def table_weight
     return @table_weight
   end
-
+  
   def sequence_number
     return @sequence_number
   end
-
+  
   def to_s()
     return YAML::dump(self)
   end
@@ -39,14 +39,14 @@ class Graph
     @addrs_to_nodes = addrs_to_nodes
     @lock = false
   end
-
+  
   def add_neighbor(ip, obj_string)
     obj = YAML::load(obj_string)
     if (@my_name == @addrs_to_nodes[ip])
       return false
     end
     $semaphore.synchronize {
-	#puts "Obtained lock for add"
+      #puts "Obtained lock for add"
       if ((not @graphs.has_key?(@addrs_to_nodes[ip])) or @graphs[@addrs_to_nodes[ip]].sequence_number < obj.sequence_number)
         @graphs[@addrs_to_nodes[ip]] = obj
 	#puts "Added and now returning"
@@ -215,7 +215,7 @@ server_thread = Thread.new{
            #puts "Building the closest"
            #graph.build_closest
 	   #puts "THIS IS THE YAML"
-	   puts "#{graph.to_s}"
+	   #puts "#{graph.to_s}"
 	 rescue Exception => e
 	   puts e.message
 	   puts e.backtrace.inspect
@@ -275,6 +275,9 @@ server_thread = Thread.new{
 	 #TODO: Listen on that socket on a loop, keeping track of numMessages out of total
 	 #TODO: Pass the  message on to the other socket
 	 #TODO: Once total is hit, close the sockets
+      elsif (a[0] == "PING")
+        client.puts "Hello from #{addrs[0]}"
+        client.close 
       end
     end
   end
@@ -294,15 +297,18 @@ stdin_thread = Thread.new{
       delay = message_arr[3]
       i = 0
       while i < num_of_pings.to_i do
-        message = Message.new("PING", "#{return_addrs[destination]}", "1", "")
+        message = Message.new("PING", "", "1", "")
         
-        test = TCPSocket.open(key, 2000)
+        t1 = Time.now
+        test = TCPSocket.open(destination, 2000)
         test.write message.build_message
         
         message = test.gets
         
         test.close
-        
+        t2 = Time.now
+        puts "From: #{destination} Count: #{i} Time: #{t2 - t1}"
+
         i = i + 1
         sleep(delay.to_i)
       end
@@ -325,7 +331,7 @@ $return_addrs.each{|key, value|
   begin
     test = TCPSocket.open(key, 2000)
     test.write message.build_message
-    puts "got back: " + test.recv($packet_size)
+    #puts "got back: " + test.recv($packet_size)
     test.close
   rescue Exception => e
     puts e.message
