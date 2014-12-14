@@ -213,7 +213,7 @@ loop do
 	#puts "Building the closest"
 	#graph.build_closest
 	#puts "THIS IS THE YAML"
-	puts "#{graph.to_s}"
+	#puts "#{graph.to_s}"
 	rescue Exception => e
 	  puts e.message
 	  puts e.backtrace.inspect
@@ -222,6 +222,41 @@ loop do
   end
 
 }
+
+stdin_thread = Thread.new{
+  loop do
+    message = gets
+    message_arr = message.split(" ")
+    if message_arr[0] == "SENDMSG"
+      destination = message_arr[1]
+      
+    elsif message_arr[0] == "PING"
+      destination = message_arr[1]
+      num_of_pings = message_arr[2]
+      delay = message_arr[3]
+      i = 0
+      while i < num_of_pings.to_i do
+        message = Message.new("PING", "#{return_addrs[destination]}", "1", "")
+        
+        test = TCPSocket.open(key, 2000)
+        test.write message.build_message
+        
+        message = test.gets
+        
+        test.close
+        
+        i = i + 1
+        sleep(delay.to_i)
+      end
+    elsif message_arr[0] == "TRACEROUTE"
+      destination = message_arr[1]
+    elsif message_arr[0] == "PRINTPREV"
+      puts "#{graph.to_s}"
+    end
+  end
+  
+}
+
 sleep(5)
 
 def sendFlood(from_ip, message_content)
