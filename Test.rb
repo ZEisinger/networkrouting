@@ -6,7 +6,7 @@ class NeighborTable
 
   def initialize()
     @table_weight = Hash.new
-    @sequnce_number = 0
+    @sequence_number = 0
   end
 
   def insertNeighbor(dest, weight)
@@ -46,21 +46,22 @@ class Graph
       return false
     end
     $semaphore.synchronize {
-	puts "Obtained lock for add"
+	#puts "Obtained lock for add"
       if ((not @graphs.has_key?(@addrs_to_nodes[ip])) or @graphs[@addrs_to_nodes[ip]].sequence_number < obj.sequence_number)
         @graphs[@addrs_to_nodes[ip]] = obj
-	puts "Added and now returning"
+	#puts "Added and now returning"
+        build_closest
         return true
       end
     }
-	puts "didn't add now returning"
+	#puts "didn't add now returning"
     return false
   end
 
   def build_closest()
     key_weight = Hash.new
     keys_to_add = Array.new
-    $semaphore.synchronize {
+    #semaphore.synchronize {
       @graphs.each do |name,value|
         key_weight[name] = 2**29 - 1
         @closest_prev[name] = nil
@@ -68,9 +69,9 @@ class Graph
       end
       key_weight[@my_name] = 0
 
-      if @graphs.keys == keys_to_add
-        return
-      end
+    #puts @graphs.keys
+    #puts @addrs_to_nodes.values.uniq
+      if @graphs.keys.sort == @addrs_to_nodes.values.uniq.sort
 
       while not keys_to_add.empty? do
         min = 2**30 - 1
@@ -90,7 +91,8 @@ class Graph
           end
         end
       end
-    }
+        end
+    #}
   end
 
   def find_next(name)
@@ -110,7 +112,7 @@ class Graph
   end
 
   def to_s()
-    return YAML::dump(self)
+    return YAML::dump(@closest_prev)
   end
 
 end
@@ -187,8 +189,6 @@ links.close
 
 graph = Graph.new(node_name,neighbor_table,addrs_to_nodes)
 
-puts "GRAPH"
-puts "#{graph.to_s}"
 
 #TODO: Perform flood message algorithm
 #Create message
@@ -203,16 +203,16 @@ loop do
       content = client.recv($packet_size)
       a = content.split("#!")
       #puts content
-      puts "got here!"
+      #puts "got here!"
       client.puts "Hello from #{addrs[0]}"
       client.close
       if(graph.add_neighbor(a[1], a[3]))
-        #sendFlood(a[1], a[3])
+        sendFlood(a[1], a[3])
       end
 	begin
-	puts "Building the closest"
-	graph.build_closest
-	puts "THIS IS THE YAML"
+	#puts "Building the closest"
+	#graph.build_closest
+	#puts "THIS IS THE YAML"
 	puts "#{graph.to_s}"
 	rescue Exception => e
 	  puts e.message
@@ -229,15 +229,22 @@ $return_addrs.each{|key, value|
   message = Message.new("FLOOD", "#{from_ip}", "1", "#{message_content}")
 #  puts key
 #  puts message.build_message
-  test = TCPSocket.open(key, 2000)
-  test.write message.build_message
-  puts "got back: " + test.recv($packet_size)
-  test.close
+  begin
+    test = TCPSocket.open(key, 2000)
+    test.write message.build_message
+    puts "got back: " + test.recv($packet_size)
+    test.close
+  rescue Exception => e
+    puts e.message
+  end
 }
 end
 
-$return_addrs.each{|key, value|
-   sendFlood(value, "#{neighbor_table.to_s}")
-}
-
-server_thread.join()
+while true
+  $return_addrs.each{|key, value|
+    sendFlood(value, "#{neighbor_table.to_s}")
+  }
+  neighbor_table.incrementSequence
+  sleep(5)
+end
+#server_thread.join()
