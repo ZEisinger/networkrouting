@@ -291,9 +291,9 @@ server_thread = Thread.new{
 	   puts "Doing traceroute"
 	   if not graph.built
               puts "TRACEROUTE ERROR: DESTINATION UNREACHABLE"
-              break
+           else
+             client.puts traceroute_to(a[3].rstrip,graph)
            end
-	   client.puts traceroute_to(a[3].rstrip,graph)
 	else
 	   puts "dest reached"
 	   client.puts "Destination Reached"
@@ -334,26 +334,26 @@ stdin_thread = Thread.new{
     if message_arr[0] == "SENDMSG"
       if not graph.built
 	puts "SENDMSG ERROR: HOST UNREACHABLE"
-	break
-      end
-      destination = message_arr[1]
-      i = message.index(message_arr[2]) - 1
-      message.slice!(0..i)
-      myMessage = Message.new("CTRL", "", "1", "#{destination}")
-      dest_node = addrs_to_nodes[destination]
+      else
+        destination = message_arr[1]
+        i = message.index(message_arr[2]) - 1
+        message.slice!(0..i)
+        myMessage = Message.new("CTRL", "", "1", "#{destination}")
+        dest_node = addrs_to_nodes[destination]
 	puts "Dest Node: #{dest_node}"
-      dest_node = graph.find_next(dest_node)
-      puts "Opening socket..."
-      sock = TCPSocket.open(dest_node, 2000)
+        dest_node = graph.find_next(dest_node)
+        puts "Opening socket..."
+        sock = TCPSocket.open(dest_node, 2000)
 	puts "Sending message...."
-      sock.puts(myMessage.build_message)
-      ack = sock.recv($packet_size)
+        sock.puts(myMessage.build_message)
+        ack = sock.recv($packet_size)
 	puts "Got message!"
-      myMessage = Message.new("MSG", "", "1", message)
+        myMessage = Message.new("MSG", "", "1", message)
 	puts "Sending actual message!"
-      sock.puts(myMessage.build_message)
-      sock.close
-      #TODO: add timeout to display message not sent
+        sock.puts(myMessage.build_message)
+        sock.close
+        #TODO: add timeout to display message not sent
+      end
     elsif message_arr[0] == "PING"
       destination = message_arr[1]
       num_of_pings = message_arr[2]
@@ -377,10 +377,10 @@ stdin_thread = Thread.new{
     elsif message_arr[0] == "TRACEROUTE"
       if not graph.built
 	puts "TRACEROUTE ERROR: DESTINATION UNREACHABLE"
-	break
+      else
+        destination = message_arr[1].rstrip
+        puts traceroute_to(addrs_to_nodes[destination], graph)
       end
-      destination = message_arr[1].rstrip
-      puts traceroute_to(addrs_to_nodes[destination], graph)
     elsif message_arr[0] == "PRINTPREV"
       puts "#{graph.to_s}"
     end
