@@ -37,7 +37,7 @@ class Graph
     @graphs[@my_name] = neighbors
     @closest_prev = Hash.new
     @addrs_to_nodes = addrs_to_nodes
-    @lock = false
+    @built = false
   end
 
   def add_neighbor(ip, obj_string)
@@ -91,8 +91,13 @@ class Graph
           end
         end
       end
-        end
+      @built = true
+      end
     #}
+  end
+
+  def built
+    return @built
   end
 
   def find_next(name)
@@ -205,8 +210,7 @@ server_thread = Thread.new{
   loop do
     Thread.fork(server.accept) do |client|
       content = client.recv($packet_size)
-      a = content.split("#!")
-   
+      a = content.split("#!")   
       if (a[0] == "FLOOD") 
          #puts content
          #puts "got here!"
@@ -277,17 +281,61 @@ server_thread = Thread.new{
 	    nextSock.close
 	    client.close			
 	 end
+      elsif a[0] == "PING"
+	client.puts "Hello from me"
+	client.close
+      elsif a[0] == "TRACEROUTE"
+	puts "Traceroute"
+	client.puts "Hello from me"
+	if a[3].rstrip != node_name 
+	   puts "Doing traceroute"
+	   if not graph.built
+              puts "TRACEROUTE ERROR: DESTINATION UNREACHABLE"
+              break
+           end
+	   client.puts traceroute_to(a[3].rstrip,graph)
+	else
+	   puts "dest reached"
+	   client.puts "Destination Reached"
+        end
+	client.close
       end
     end
   end
 
 }
 
+def traceroute_to (destination, graph)
+   message = Message.new("TRACEROUTE", "", "1", "#{destination}")
+
+   next_n = graph.find_next(destination)
+puts "found next #{next_n}"
+   t1 = Time.now
+   test = TCPSocket.open(next_n, 2000)
+   test.write message.build_message
+   #get back "ping"
+puts "waiting for ping"
+   message = test.recv($packet_size)
+   t2 = Time.now
+puts "got ping"
+   #get back actual traceroute
+   message = test.recv($packet_size)
+
+   message = "#{t2-t1} secs for transmission to #{next_n}\n#{message}"
+
+   test.close
+   return message
+end
+
 stdin_thread = Thread.new{
   loop do
     message = STDIN.gets
     message_arr = message.split(" ")
     if message_arr[0] == "SENDMSG"
+      if not graph.built
+	puts "SENDMSG ERROR: HOST UNREACHABLE"
+	break
+      end
       destination = message_arr[1]
       i = message.index(message_arr[2]) - 1
       message.slice!(0..i)
@@ -312,20 +360,27 @@ stdin_thread = Thread.new{
       delay = message_arr[3]
       i = 0
       while i < num_of_pings.to_i do
-        message = Message.new("PING", "#{return_addrs[destination]}", "1", "")
+        message = Message.new("PING", "", "1", "")
         
-        test = TCPSocket.open(key, 2000)
+	t1 = Time.now
+        test = TCPSocket.open(destination, 2000)
         test.write message.build_message
-        
+       
         message = test.gets
         
         test.close
-        
+        t2 = Time.now
+ 	puts "From: #{destination} Count: #{i} Time: #{t2 - t1}"
         i = i + 1
         sleep(delay.to_i)
       end
     elsif message_arr[0] == "TRACEROUTE"
-      destination = message_arr[1]
+      if not graph.built
+	puts "TRACEROUTE ERROR: DESTINATION UNREACHABLE"
+	break
+      end
+      destination = message_arr[1].rstrip
+      puts traceroute_to(addrs_to_nodes[destination], graph)
     elsif message_arr[0] == "PRINTPREV"
       puts "#{graph.to_s}"
     end
