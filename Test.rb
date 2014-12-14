@@ -96,13 +96,17 @@ class Graph
   end
 
   def find_next(name)
+    if(name == @my_name)
+	return nil
+    end
     $semaphore.synchronize{
       curr = @closest_prev[name]
-      while curr != nil do
+	puts "Curr: #{curr} Name: #{name}"
+      while curr != @my_name do
         name = curr
         curr = @closest_prev[name]
       end
-      @graphs[@my_name].each do |key, value|
+      @graphs[@my_name].table_weight.each do |key, value|
         if @addrs_to_nodes[key] == name
           return key
         end
@@ -130,7 +134,7 @@ class Message
 	end
 
 	def build_message
-		return @protocol_identifier + "#!" + @ip + "#!" + @total + "#!" + @message + "\000"
+		return @protocol_identifier + "#!" + @ip + "#!" + @total + "#!" + @message
 	end
 	
 	def self.protocol_identifier
@@ -220,7 +224,7 @@ server_thread = Thread.new{
     Thread.fork(server.accept) do |client|
       content = client.recv($packet_size)
       a = content.split("#!")
-      
+   
       if (a[0] == "FLOOD") 
          #puts content
          #puts "got here!"
@@ -239,35 +243,42 @@ server_thread = Thread.new{
 	   puts e.backtrace.inspect
   	 end
       elsif (a[0] == "CTRL")
+	puts "CONTROL MESSAGE"	
 	 #Destination address/name
-         dest_node = a[3]
-	 dest_node = addrs_to_nodes[dest_node]
-	 nextNode = graph.findNext(dest_node)
+
+	 dest_node = addrs_to_nodes[a[3].rstrip]
+	puts "DestNode: #{dest_node}"
+	 nextNode = graph.find_next(dest_node)
+	puts "Next Node: #{nextNode}"
 	 #This is the destination
-	 if (nextNode == nil) 
+	 if (nextNode == nil)
+		puts "I am the destination!" 
 	    #Send an acknowledgement
-	    client.puts(Message.new("ACK", "", "1","").to_s)
+	    client.puts(Message.new("ACK", "", "1","").build_message)
+	puts "Message sent!"
 	    total = 1
 	    num_received = 0
 	    full_message = ""
 	    begin
+		puts "Waiting for client..."
 		content = client.recv($packet_size)
+		puts "Got content: #{content}"
 		a = content.split("#!")
-		total = a[2]
+		total = a[2].to_i
 		num_received = num_received + 1
+		puts full_message
 		full_message = full_message + a[3]
+		puts full_message
+		puts "#{num_received} / #{total}"
 	    end while (num_received < total)
+		puts "exited loop"
 	    puts full_message
 	    client.close
 	 else
+		puts "Not the destination"
 	    #Will need to translate nextNode to ip
-	    translated = ""
-	    $return_addrs.each{|dest, src|
-		if (addrs_to_nodes[dest] == nextNode)
-		   translated = dest
-		end
-	    }
-	    nextSock = TCPSocket.open(translated, 2000)
+	    
+	    nextSock = TCPSocket.open(nextNode, 2000)
 	    #Send the message along
 	    nextSock.puts(content)
 	    content = nextSock.recv($packet_size)
@@ -277,7 +288,7 @@ server_thread = Thread.new{
 	    begin
 		content = client.recv($packet_size)
 		a = content.split("#!")
-		total = a[2]
+		total = a[2].to_i
 		num_received = num_received + 1
 		nextSock.puts(content)
 	    end while (num_received < total)
@@ -314,7 +325,23 @@ stdin_thread = Thread.new{
     message_arr = message.split(" ")
     if message_arr[0] == "SENDMSG"
       destination = message_arr[1]
-      
+      i = message.index(message_arr[2]) - 1
+      message.slice!(0..i)
+      myMessage = Message.new("CTRL", "", "1", "#{destination}")
+      dest_node = addrs_to_nodes[destination]
+	puts "Dest Node: #{dest_node}"
+      dest_node = graph.find_next(dest_node)
+      puts "Opening socket..."
+      sock = TCPSocket.open(dest_node, 2000)
+	puts "Sending message...."
+      sock.puts(myMessage.build_message)
+      ack = sock.recv($packet_size)
+	puts "Got message!"
+      myMessage = Message.new("MSG", "", "1", message)
+	puts "Sending actual message!"
+      sock.puts(myMessage.build_message)
+      sock.close
+      #TODO: add timeout to display message not sent
     elsif message_arr[0] == "PING"
       destination = message_arr[1]
       num_of_pings = message_arr[2]
