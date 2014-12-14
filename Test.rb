@@ -172,6 +172,7 @@ file.close
 puts "My IPs"
 addrs.each { |a| puts a }
 
+
 #Read weights file, figure out neighbors
 links = File.new(weights, "r")
 $return_addrs = Hash.new
@@ -197,31 +198,89 @@ graph = Graph.new(node_name,neighbor_table,addrs_to_nodes)
 
 server = TCPServer.open(2000)
 server_thread = Thread.new{
-loop do
-   
+  loop do
     Thread.fork(server.accept) do |client|
       content = client.recv($packet_size)
       a = content.split("#!")
-      #puts content
-      #puts "got here!"
-      client.puts "Hello from #{addrs[0]}"
-      client.close
-      if(graph.add_neighbor(a[1], a[3]))
-        sendFlood(a[1], a[3])
+      
+      if (a[0] == "FLOOD") 
+         #puts content
+         #puts "got here!"
+         client.puts "Hello from #{addrs[0]}"
+         client.close
+         if(graph.add_neighbor(a[1], a[3]))
+           sendFlood(a[1], a[3])
+         end
+	 begin
+           #puts "Building the closest"
+           #graph.build_closest
+	   #puts "THIS IS THE YAML"
+	   puts "#{graph.to_s}"
+	 rescue Exception => e
+	   puts e.message
+	   puts e.backtrace.inspect
+  	 end
+      elsif (a[0] == "CTRL")
+	 #Destination address/name
+         dest_node = a[3]
+	 dest_node = addrs_to_nodes[dest_node]
+	 nextNode = graph.findNext(dest_node)
+	 #This is the destination
+	 if (nextNode == nil) 
+	    #Send an acknowledgement
+	    client.puts(Message.new("ACK", "", "1","").to_s)
+	    total = 1
+	    num_received = 0
+	    full_message = ""
+	    begin
+		content = client.recv($packet_size)
+		a = content.split("#!")
+		total = a[2]
+		num_received = num_received + 1
+		full_message = full_message + a[3]
+	    end while (num_received < total)
+	    puts full_message
+	    client.close
+	 else
+	    #Will need to translate nextNode to ip
+	    translated = ""
+	    $return_addrs.each{|dest, src|
+		if (addrs_to_nodes[dest] == nextNode)
+		   translated = dest
+		end
+	    }
+	    nextSock = TCPSocket.open(translated, 2000)
+	    #Send the message along
+	    nextSock.puts(content)
+	    content = nextSock.recv($packet_size)
+	    client.puts(content)
+	    total = 1
+	    num_received = 0
+	    begin
+		content = client.recv($packet_size)
+		a = content.split("#!")
+		total = a[2]
+		num_received = num_received + 1
+		nextSock.puts(content)
+	    end while (num_received < total)
+	    nextSock.close
+	    client.close			
+	 end
+	 #TODO: Determine if I am destination
+	 #TODO: If dest, send back an ACK, then listen on socket....
+	 #TODO: If not dest, figure out where to send next
+	 #TODO: Then, open socket to that ip
+ 	 #TODO: Send the CTRL message that way, and then listen on that socket
+	 #TODO: We will get an ACK telling us to start listing from the original socket
+	 #TODO: Listen on that socket on a loop, keeping track of numMessages out of total
+	 #TODO: Pass the  message on to the other socket
+	 #TODO: Once total is hit, close the sockets
       end
-	begin
-	#puts "Building the closest"
-	#graph.build_closest
-	#puts "THIS IS THE YAML"
-	puts "#{graph.to_s}"
-	rescue Exception => e
-	  puts e.message
-	  puts e.backtrace.inspect
-  	end
     end
   end
 
 }
+#sleep to allow us to set everything up
 sleep(5)
 
 def sendFlood(from_ip, message_content)
@@ -240,11 +299,25 @@ $return_addrs.each{|key, value|
 }
 end
 
-while true
-  $return_addrs.each{|key, value|
-    sendFlood(value, "#{neighbor_table.to_s}")
-  }
-  neighbor_table.incrementSequence
-  sleep(25)
-end
+#Flood sending thread, reads file every interval time
+Thread.new {
+  while true
+    sleep(interval.to_i)
+    links = File.new(weights, "r")
+
+    while (line = links.gets)
+        a = line.split(",")
+        if (addrs.include?(a[0]))
+                #map of destination to source address
+                neighbor_table.insertNeighbor(a[1], a[2])
+                puts "My neighbor: #{a[1]} Weight: #{a[2]}"
+        end
+    end
+    links.close
+    $return_addrs.each{|key, value|
+      sendFlood(value, "#{neighbor_table.to_s}")
+    }
+    neighbor_table.incrementSequence
+  end
+}
 #server_thread.join()
