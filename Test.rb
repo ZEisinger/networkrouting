@@ -283,7 +283,7 @@ server_thread = Thread.new{
 
 stdin_thread = Thread.new{
   loop do
-    message = gets
+    message = STDIN.gets
     message_arr = message.split(" ")
     if message_arr[0] == "SENDMSG"
       destination = message_arr[1]
@@ -336,7 +336,6 @@ end
 #Flood sending thread, reads file every interval time
 Thread.new {
   while true
-    sleep(interval.to_i)
     links = File.new(weights, "r")
 
     while (line = links.gets)
@@ -352,6 +351,7 @@ Thread.new {
       sendFlood(value, "#{neighbor_table.to_s}")
     }
     neighbor_table.incrementSequence
+    sleep(interval.to_i)
   end
 }
-#server_thread.join()
+stdin_thread.join()
