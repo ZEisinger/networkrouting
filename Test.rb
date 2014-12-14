@@ -245,6 +245,6 @@ while true
     sendFlood(value, "#{neighbor_table.to_s}")
   }
   neighbor_table.incrementSequence
-  sleep(5)
+  sleep(25)
 end
 #server_thread.join()
