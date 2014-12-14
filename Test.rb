@@ -246,18 +246,24 @@ server_thread = Thread.new{
 	    num_received = 0
 	    full_message = ""
 	    begin
-		puts "Waiting for client..."
-		content = client.recv($packet_size)
-		puts "Got content: #{content}"
-		a = content.split("#!")
-		total = a[2].to_i
-		num_received = num_received + 1
-		puts full_message
-		full_message = full_message + a[3]
-		puts full_message
-		puts "#{num_received} / #{total}"
+              puts "Waiting for client..."
+              recv = select([client],nil,nil,5)
+              if recv == nil
+                break
+              end
+              
+              content = client.recv($packet_size)
+              
+              puts "Got content: #{content}"
+              a = content.split("#!")
+              total = a[2].to_i
+              num_received = num_received + 1
+              puts full_message
+              full_message = full_message + a[3]
+              puts full_message
+              puts "#{num_received} / #{total}"
 	    end while (num_received < total)
-		puts "exited loop"
+               puts "exited loop"
 	    puts full_message
 	    client.close
 	 else
@@ -267,19 +273,22 @@ server_thread = Thread.new{
 	    nextSock = TCPSocket.open(nextNode, 2000)
 	    #Send the message along
 	    nextSock.puts(content)
-	    content = nextSock.recv($packet_size)
-	    client.puts(content)
-	    total = 1
-	    num_received = 0
-	    begin
+            recv = select([nextSock],nil,nil,5)
+            if recv != nil
+              content = nextSock.recv($packet_size)
+              client.puts(content)
+              total = 1
+              num_received = 0
+              begin
 		content = client.recv($packet_size)
 		a = content.split("#!")
 		total = a[2].to_i
 		num_received = num_received + 1
 		nextSock.puts(content)
-	    end while (num_received < total)
-	    nextSock.close
-	    client.close			
+              end while (num_received < total)
+              nextSock.close
+              client.close
+            end
 	 end
       elsif a[0] == "PING"
 	client.puts "Hello from me"
@@ -346,13 +355,20 @@ stdin_thread = Thread.new{
         sock = TCPSocket.open(dest_node, 2000)
 	puts "Sending message...."
         sock.puts(myMessage.build_message)
-        ack = sock.recv($packet_size)
-	puts "Got message!"
-        myMessage = Message.new("MSG", "", "1", message)
-	puts "Sending actual message!"
-        sock.puts(myMessage.build_message)
+        ack = select([sock],nil,nil,5)
+        if ack == nil
+          puts "SENDMSG ERROR: No acknowledgement of pipe build"
+        else
+          puts "Got message!"
+          myMessage = Message.new("MSG", "", "1", message)
+          puts "Sending actual message!"
+          sock.puts(myMessage.build_message)
+          ack = select([sock],nil,nil,5)
+          if ack == nil
+            puts "SENDMSG ERROR: No acknowledgement of message sent"
+          end
+        end
         sock.close
-        #TODO: add timeout to display message not sent
       end
     elsif message_arr[0] == "PING"
       destination = message_arr[1]
