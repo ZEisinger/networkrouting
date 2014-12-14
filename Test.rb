@@ -138,6 +138,24 @@ class Message
 	end
 end
 
+def traceroute_to (destination, graph)
+  message = Message.new("PING", "", "1", "#{destination}")
+  
+  next_n = graph.find_next(destination)
+  t1 = Time.now
+  test = TCPSocket.open(next_n, 2000) #TODO: sends to next in line
+  test.write message.build_message
+  
+  message = test.gets
+  t2 = Time.now
+  
+  message = test.read
+  
+  message = "#{t2 - t1} secs for transmission to #{destination}\n" . message
+  
+  test.close
+end
+
 #Get command line arg to determine what node I am
 node_name = ARGV[0]
 
@@ -278,6 +296,12 @@ server_thread = Thread.new{
       elsif (a[0] == "PING")
         client.puts "Hello from #{addrs[0]}"
         client.close 
+      elsif (a[0] == "TRACEROUTE")
+        client.puts "Hello from #{addrs[0]}"
+        if ( destination != addrs[0] )
+          client.puts traceroute_to(a[3], graph)
+        end
+        client.close
       end
     end
   end
@@ -314,6 +338,7 @@ stdin_thread = Thread.new{
       end
     elsif message_arr[0] == "TRACEROUTE"
       destination = message_arr[1]
+      puts traceroute_to(destination, graph)
     elsif message_arr[0] == "PRINTPREV"
       puts "#{graph.to_s}"
     end
